@@ -127,7 +127,7 @@ class MainWindow(QMainWindow):
 
     def update_wallpaper(self):
         """刷新壁纸显示"""
-        self.update() # 触发 paintEvent
+        self.repaint()  # 使用 repaint
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
