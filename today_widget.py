@@ -86,8 +86,19 @@ class HourDetailDialog(QWidget):
 
         colors = [to_rgba('#3498db') if m > 0 else (0.74, 0.76, 0.78, 0.3) for m in minutes_data]
         bars = ax.bar(intervals, minutes_data, color=colors, edgecolor='white', linewidth=1)
-        ax.set_title(f"{self.hour:02d}点的分钟级学习分布 (分钟)", pad=15, fontsize=12, fontweight='bold')
-        ax.set_ylim(0, 11)
+
+        # 在柱子上方显示时长标签 (HH:MM 格式)
+        for bar, val in zip(bars, minutes_data):
+            if val > 0:
+                height = bar.get_height()
+                h = int(val // 60)
+                m = int(val % 60)
+                label = f"{h:02d}:{m:02d}"
+                ax.text(bar.get_x() + bar.get_width() / 2., height, label,
+                        ha='center', va='bottom', fontsize=8, fontweight='bold', color='#2c3e50')
+
+        ax.set_title(f"{self.hour:02d}点的分钟级学习分布", pad=15, fontsize=12, fontweight='bold')
+        ax.set_ylim(0, max(minutes_data + [11]))
         self.figure.tight_layout()
         self.canvas.draw()
 
@@ -225,12 +236,22 @@ class TodayWidget(QWidget):
         colors = [to_rgba('#3498db') if m > 0 else (0.74, 0.76, 0.78, 0.3) for m in minutes]
         bars = ax.bar(hours, minutes, color=colors, edgecolor='white', linewidth=1)
 
-        ax.set_title(f"{self.current_date.strftime('%Y-%m-%d')} 24小时分布 (分钟)", pad=15, fontweight='bold')
+        # 在柱子上方显示时长标签 (HH:MM 格式)
+        for bar, val in zip(bars, minutes):
+            if val > 0:
+                height = bar.get_height()
+                h = int(val // 60)
+                m = int(val % 60)
+                label = f"{h:02d}:{m:02d}"
+                ax.text(bar.get_x() + bar.get_width() / 2., height, label,
+                        ha='center', va='bottom', fontsize=8, fontweight='bold', color='#2c3e50')
+
+        ax.set_title(f"{self.current_date.strftime('%Y-%m-%d')} 24小时分布", pad=15, fontweight='bold')
         ax.set_xticks(hours)
         ax.set_xticklabels([f"{h:02d}" for h in hours], fontsize=8)
 
         # 优化坐标轴范围，消除警告
-        max_min = max(minutes + [10])
+        max_min = max(minutes + [12])  # 预留一点高度给标签
         ax.set_ylim(0, max_min)
         ax.set_xlim(-0.5, 23.5)
 
