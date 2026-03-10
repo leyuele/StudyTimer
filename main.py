@@ -50,6 +50,12 @@ class MainWindow(QMainWindow):
         self.central_widget.addWidget(self.stats_page)
         self.timer_page.record_added.connect(self.stats_page.update_charts)
 
+        # 新增：今日统计页面
+        from today_widget import TodayWidget
+        self.today_page = TodayWidget(self.dm)
+        self.central_widget.addWidget(self.today_page)
+        self.timer_page.record_added.connect(self.today_page.update_today_stats)
+
         self.settings_page = SettingsWidget(self.dm, self)
         self.central_widget.addWidget(self.settings_page)
 
@@ -66,6 +72,10 @@ class MainWindow(QMainWindow):
         timer_act.triggered.connect(lambda: self.central_widget.setCurrentIndex(0))
         nav_bar.addAction(timer_act)
 
+        today_act = QAction(TextIcon("📅"), "今日", self)  # 新增
+        today_act.triggered.connect(lambda: self.central_widget.setCurrentIndex(2))
+        nav_bar.addAction(today_act)
+
         stats_act = QAction(TextIcon("📊"), "统计分析", self)
         stats_act.triggered.connect(lambda: self.central_widget.setCurrentIndex(1))
         nav_bar.addAction(stats_act)
@@ -75,7 +85,7 @@ class MainWindow(QMainWindow):
         nav_bar.addWidget(spacer)
 
         settings_act = QAction(TextIcon("⚙️"), "设置", self)
-        settings_act.triggered.connect(lambda: self.central_widget.setCurrentIndex(2))
+        settings_act.triggered.connect(lambda: self.central_widget.setCurrentIndex(3))
         nav_bar.addAction(settings_act)
 
     def paintEvent(self, event):
