@@ -33,6 +33,7 @@ class DataManager:
             "wallpaper": "",
             "slogan": "保持专注，更进一步",
             "show_slogan": True,
+            "slogan_italic": True,  # 新增：默认使用斜体
             "version": self.VERSION
         }
         self.load_data()

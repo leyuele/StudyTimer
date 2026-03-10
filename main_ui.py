@@ -7,6 +7,7 @@ from PyQt6.QtGui import QPixmap, QPalette, QBrush, QFont
 from datetime import datetime
 from models import DataManager
 
+
 class TimerWidget(QWidget):
     record_added = pyqtSignal()
 
@@ -21,12 +22,16 @@ class TimerWidget(QWidget):
         layout = QVBoxLayout(self)
         layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
+        # 根据设置决定斜体或正体
+        is_italic = self.dm.settings.get("slogan_italic", True)
+        font_style = "font-style: italic;" if is_italic else "font-style: normal;"
+
         self.slogan_label = QLabel(self.dm.settings.get("slogan", "保持专注"))
-        self.slogan_label.setStyleSheet("""
+        self.slogan_label.setStyleSheet(f"""
             font-size: 28px; 
             color: #2c3e50; 
             font-family: 'Microsoft YaHei'; 
-            font-style: italic;
+            {font_style}
             margin-bottom: 30px;
             background-color: rgba(255, 255, 255, 120);
             padding: 10px;

@@ -303,6 +303,7 @@ class ImageCropper(QDialog):
         real_rect = QRect(real_x, real_y, real_w, real_h).intersected(self.original_pixmap.rect())
         return self.original_pixmap.copy(real_rect)
 
+
 class SettingsWidget(QWidget):
     def __init__(self, data_manager, main_window):
         super().__init__()
@@ -316,18 +317,21 @@ class SettingsWidget(QWidget):
         layout.setContentsMargins(30, 30, 30, 30)
         layout.setSpacing(25)
 
+        # 标题
         title_label = QLabel("设置中心")
         title_label.setStyleSheet("font-size: 24px; font-weight: bold; margin-bottom: 10px;")
         layout.addWidget(title_label)
 
-        # 壁纸配置区域
+        # 壁纸与外观
         wallpaper_section = QVBoxLayout()
         wp_title = QLabel("壁纸与外观")
         wp_title.setStyleSheet("font-size: 18px; font-weight: bold; color: #34495e;")
         wallpaper_section.addWidget(wp_title)
 
+        # 选择壁纸按钮
         path_layout = QHBoxLayout()
-        self.wallpaper_label = QLabel(f"当前壁纸: {os.path.basename(self.dm.settings.get('wallpaper', '默认'))}")
+        current_wp = self.dm.settings.get('wallpaper', '无')
+        self.wallpaper_label = QLabel(f"当前壁纸: {os.path.basename(current_wp) if current_wp else '无'}")
         self.wallpaper_label.setStyleSheet("color: #7f8c8d;")
         wallpaper_btn = QPushButton("选择并裁剪壁纸")
         wallpaper_btn.setFixedWidth(150)
@@ -336,6 +340,7 @@ class SettingsWidget(QWidget):
         path_layout.addWidget(wallpaper_btn)
         wallpaper_section.addLayout(path_layout)
 
+        # 壁纸透明度
         opacity_layout = QHBoxLayout()
         opacity_layout.addWidget(QLabel("壁纸显示浓度:"))
         self.opacity_slider = QSlider(Qt.Orientation.Horizontal)
@@ -347,17 +352,16 @@ class SettingsWidget(QWidget):
         opacity_layout.addWidget(self.opacity_slider)
         opacity_layout.addWidget(self.opacity_val_label)
         wallpaper_section.addLayout(opacity_layout)
-        
         layout.addLayout(wallpaper_section)
 
-        # 标语设置
+        # 个性化标语
         slogan_section = QVBoxLayout()
         sl_title = QLabel("个性化标语")
         sl_title.setStyleSheet("font-size: 18px; font-weight: bold; color: #34495e;")
         slogan_section.addWidget(sl_title)
 
         slogan_input_layout = QHBoxLayout()
-        self.slogan_edit = QLineEdit(self.dm.settings.get("slogan", "保持专注"))
+        self.slogan_edit = QLineEdit(self.dm.settings.get("slogan", "保持专注，更进一步"))
         self.show_slogan_cb = QCheckBox("显示")
         self.show_slogan_cb.setChecked(self.dm.settings.get("show_slogan", True))
         save_slogan_btn = QPushButton("保存")
@@ -367,6 +371,19 @@ class SettingsWidget(QWidget):
         slogan_input_layout.addWidget(self.show_slogan_cb)
         slogan_input_layout.addWidget(save_slogan_btn)
         slogan_section.addLayout(slogan_input_layout)
+
+        # 新增：标语样式设置（正体/斜体）
+        slogan_style_layout = QHBoxLayout()
+        slogan_style_layout.addWidget(QLabel("标语样式:"))
+
+        self.italic_cb = QCheckBox("使用斜体")
+        self.italic_cb.setChecked(self.dm.settings.get("slogan_italic", True))
+        self.italic_cb.setToolTip("勾选使用斜体，取消勾选使用正体")
+        slogan_style_layout.addWidget(self.italic_cb)
+
+        slogan_style_layout.addStretch()
+        slogan_section.addLayout(slogan_style_layout)
+
         layout.addLayout(slogan_section)
 
         # 数据管理
@@ -385,6 +402,7 @@ class SettingsWidget(QWidget):
         data_section.addLayout(io_layout)
         layout.addLayout(data_section)
 
+        # 版本信息
         layout.addStretch()
         version_label = QLabel(f"StudyTimer v{self.dm.VERSION}")
         version_label.setStyleSheet("color: #bdc3c7; font-size: 12px;")
@@ -398,7 +416,6 @@ class SettingsWidget(QWidget):
         )
         if not file_path:
             return
-
         # 实例化裁剪器
         cropper = ImageCropper(file_path, self)
         if cropper.exec() == QDialog.DialogCode.Accepted:
@@ -407,60 +424,92 @@ class SettingsWidget(QWidget):
             if cropped_pix.isNull():
                 QMessageBox.warning(self, "错误", "裁剪失败，图片无效！")
                 return
-
-            # 修复：使用绝对路径确保保存位置正确
+            # 保存裁剪后的壁纸（同目录下current_wallpaper.png）
             save_dir = os.path.dirname(os.path.abspath(self.dm.storage_path))
-            if not save_dir:  # 如果没有目录部分，使用当前工作目录
+            if not save_dir:
                 save_dir = os.getcwd()
-
             os.makedirs(save_dir, exist_ok=True)
             save_path = os.path.join(save_dir, "current_wallpaper.png")
-
             # 覆盖保存
             if cropped_pix.save(save_path, "PNG", quality=95):
-                # 先更新设置
                 self.dm.settings["wallpaper"] = save_path
                 self.dm.settings["wallpaper_opacity"] = self.dm.settings.get("wallpaper_opacity", 100)
                 self.dm.save_data()
-
-                # 更新UI显示
                 self.wallpaper_label.setText(f"当前壁纸: current_wallpaper.png")
-
-                # 修复：调用主窗口的 update_wallpaper 方法（如果存在）或强制重绘
                 if hasattr(self.main_window, 'update_wallpaper'):
                     self.main_window.update_wallpaper()
                 else:
-                    # 强制立即重绘
                     self.main_window.repaint()
-
                 QMessageBox.information(self, "成功", "壁纸裁剪并设置完成！")
             else:
                 QMessageBox.warning(self, "错误", "壁纸保存失败，请检查目录权限！")
 
     def update_opacity(self, value):
+        """更新壁纸透明度"""
         self.dm.settings["wallpaper_opacity"] = value
         self.opacity_val_label.setText(f"{value}%")
         self.dm.save_data()
         self.main_window.update()
 
     def save_slogan(self):
-        self.dm.settings["slogan"] = self.slogan_edit.text()
+        """保存标语设置"""
+        self.dm.settings["slogan"] = self.slogan_edit.text().strip()
         self.dm.settings["show_slogan"] = self.show_slogan_cb.isChecked()
+        self.dm.settings["slogan_italic"] = self.italic_cb.isChecked()  # 保存斜体设置
         self.dm.save_data()
-        self.main_window.timer_page.slogan_label.setText(self.slogan_edit.text())
-        self.main_window.timer_page.slogan_label.setVisible(self.show_slogan_cb.isChecked())
-        QMessageBox.information(self, "提示", "设置已保存")
+        # 实时更新计时器页面的标语
+        self.main_window.timer_page.slogan_label.setText(self.dm.settings["slogan"])
+        self.main_window.timer_page.slogan_label.setVisible(self.dm.settings["show_slogan"])
+        # 更新标语样式
+        self._update_slogan_style()
+        QMessageBox.information(self, "提示", "标语设置已保存！")
+
+    def _update_slogan_style(self):
+        """更新标语的字体样式（正体/斜体）"""
+        is_italic = self.dm.settings.get("slogan_italic", True)
+        slogan_label = self.main_window.timer_page.slogan_label
+
+        # 获取当前样式表
+        current_style = slogan_label.styleSheet()
+
+        # 构建新的样式表，根据设置添加或移除 font-style
+        if is_italic:
+            font_style = "font-style: italic;"
+        else:
+            font_style = "font-style: normal;"
+
+        # 更新样式
+        slogan_label.setStyleSheet(f"""
+            font-size: 28px; 
+            color: #2c3e50; 
+            font-family: 'Microsoft YaHei'; 
+            {font_style}
+            margin-bottom: 30px;
+            background-color: rgba(255, 255, 255, 120);
+            padding: 10px;
+            border-radius: 10px;
+        """)
 
     def export_records(self):
-        file_path, _ = QFileDialog.getSaveFileName(self, "导出记录", "study_records.json", "JSON 文件 (*.json)")
+        """导出学习记录"""
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, "导出记录", "study_timer_records.json",
+            "JSON 文件 (*.json)"
+        )
         if file_path:
             self.dm.export_data(file_path)
-            QMessageBox.information(self, "成功", f"数据已成功导出到: {file_path}")
+            QMessageBox.information(self, "成功", f"数据已导出至：{file_path}")
 
     def import_records(self):
-        file_path, _ = QFileDialog.getOpenFileName(self, "导入记录", "", "JSON 文件 (*.json)")
+        """导入学习记录"""
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "导入记录", "",
+            "JSON 文件 (*.json)"
+        )
         if file_path:
             if self.dm.import_data(file_path):
                 QMessageBox.information(self, "成功", "数据导入成功！")
+                # 刷新统计页面
+                self.main_window.stats_page.update_charts()
             else:
-                QMessageBox.warning(self, "错误", "导入失败，请检查文件格式。")
+                QMessageBox.warning(self, "错误", "导入失败！请检查文件格式是否正确。")
