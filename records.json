@@ -1,0 +1,18 @@
+{
+    "records": [
+        {
+            "start": "2026-03-10 20:34:07",
+            "end": "2026-03-10 20:34:10",
+            "category": "Study"
+        }
+    ],
+    "settings": {
+        "wallpaper": "D:\\pythontest\\StudyTimer\\current_wallpaper.png",
+        "slogan": "保持专注，更进一步",
+        "show_slogan": true,
+        "slogan_italic": true,
+        "version": "1.0.0",
+        "wallpaper_opacity": 100
+    },
+    "version": "1.0.0"
+}

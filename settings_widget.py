@@ -1,9 +1,10 @@
 import os
-from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton, 
-                             QLabel, QFileDialog, QLineEdit, QCheckBox, QMessageBox, 
+from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
+                             QLabel, QFileDialog, QLineEdit, QCheckBox, QMessageBox,
                              QSlider, QDialog, QDialogButtonBox)
 from PyQt6.QtCore import Qt, QRect, QPoint, QSize
-from PyQt6.QtGui import QPixmap, QPainter, QPen, QColor, QBrush, QRegion
+from PyQt6.QtGui import (QPixmap, QPainter, QPen, QColor, QBrush,
+                         QCursor, QPaintEvent)
 
 
 class ImageCropper(QDialog):

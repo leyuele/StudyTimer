@@ -1,0 +1,1 @@
+pyinstaller --noconsole --onefile --add-data "models.py;." --add-data "main_ui.py;." --add-data "stats_widget.py;." --add-data "settings_widget.py;." --add-data "today_widget.py;." --name "StudyTimer" main.py
