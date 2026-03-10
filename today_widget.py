@@ -1,4 +1,4 @@
-import sys
+import os
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QComboBox,
                              QLabel, QPushButton, QStackedWidget, QGridLayout,
                              QScrollArea, QFrame, QSizePolicy, QButtonGroup)
@@ -77,28 +77,44 @@ class HourDetailDialog(QWidget):
         ax = self.figure.add_subplot(111)
         ax.set_facecolor('none')
         intervals = [f"{i * 10}-{(i + 1) * 10}" for i in range(6)]
-        minutes_data = [0] * 6
+        # 统计每个10分钟区间内的秒数
+        seconds_data = [0] * 6
         for record in self.records:
             start_min, end_min = record.start_time.minute, record.end_time.minute
-            for i in range(start_min // 10, min(end_min // 10 + 1, 6)):
-                i_start, i_end = max(i * 10, start_min), min((i + 1) * 10, end_min)
-                if i_end > i_start: minutes_data[i] += (i_end - i_start)
+            start_sec, end_sec = record.start_time.second, record.end_time.second
 
-        colors = [to_rgba('#3498db') if m > 0 else (0.74, 0.76, 0.78, 0.3) for m in minutes_data]
-        bars = ax.bar(intervals, minutes_data, color=colors, edgecolor='white', linewidth=1)
+            # 简化计算：将起始和结束时间都转为该小时内的总秒数
+            rec_start_total = start_min * 60 + start_sec
+            rec_end_total = end_min * 60 + end_sec
 
-        # 在柱子上方显示时长标签 (HH:MM 格式)
-        for bar, val in zip(bars, minutes_data):
-            if val > 0:
+            for i in range(6):
+                interval_start = i * 10 * 60
+                interval_end = (i + 1) * 10 * 60
+                # 计算交集秒数
+                overlap_start = max(rec_start_total, interval_start)
+                overlap_end = min(rec_end_total, interval_end)
+                if overlap_end > overlap_start:
+                    seconds_data[i] += (overlap_end - overlap_start)
+
+        # 转换为分钟数值供绘图
+        minutes_plot_data = [s / 60 for s in seconds_data]
+        colors = [to_rgba('#3498db') if s > 0 else (0.74, 0.76, 0.78, 0.3) for s in seconds_data]
+        bars = ax.bar(intervals, minutes_plot_data, color=colors, edgecolor='white', linewidth=1)
+
+        # 在柱子上方显示时长标签 (MM:SS 格式)
+        for bar, total_sec in zip(bars, seconds_data):
+            if total_sec > 0:
                 height = bar.get_height()
-                h = int(val // 60)
-                m = int(val % 60)
-                label = f"{h:02d}:{m:02d}"
+                m = int(total_sec // 60)
+                s = int(total_sec % 60)
+                label = f"{m:02d}:{s:02d}"
                 ax.text(bar.get_x() + bar.get_width() / 2., height, label,
                         ha='center', va='bottom', fontsize=8, fontweight='bold', color='#2c3e50')
 
         ax.set_title(f"{self.hour:02d}点的分钟级学习分布", pad=15, fontsize=12, fontweight='bold')
-        ax.set_ylim(0, max(minutes_data + [11]))
+        # 纵轴显示分钟，最大10分钟
+        ax.set_ylim(0, max(minutes_plot_data + [11]))
+        ax.set_ylabel("学习时长 (分钟)")
         self.figure.tight_layout()
         self.canvas.draw()
 
@@ -232,17 +248,21 @@ class TodayWidget(QWidget):
         ax = self.figure.add_subplot(111)
         ax.set_facecolor('none')
         hours = list(range(24))
-        minutes = [sum((r.end_time - r.start_time).total_seconds() / 60 for r in self.hourly_records[h]) for h in hours]
-        colors = [to_rgba('#3498db') if m > 0 else (0.74, 0.76, 0.78, 0.3) for m in minutes]
-        bars = ax.bar(hours, minutes, color=colors, edgecolor='white', linewidth=1)
+        # 统计每个小时内的总秒数
+        hourly_seconds = [sum((r.end_time - r.start_time).total_seconds() for r in self.hourly_records[h]) for h in
+                          hours]
+        # 转换为分钟数值供绘图
+        minutes_plot_data = [s / 60 for s in hourly_seconds]
+        colors = [to_rgba('#3498db') if s > 0 else (0.74, 0.76, 0.78, 0.3) for s in hourly_seconds]
+        bars = ax.bar(hours, minutes_plot_data, color=colors, edgecolor='white', linewidth=1)
 
-        # 在柱子上方显示时长标签 (HH:MM 格式)
-        for bar, val in zip(bars, minutes):
-            if val > 0:
+        # 在柱子上方显示时长标签 (MM:SS 格式)
+        for bar, total_sec in zip(bars, hourly_seconds):
+            if total_sec > 0:
                 height = bar.get_height()
-                h = int(val // 60)
-                m = int(val % 60)
-                label = f"{h:02d}:{m:02d}"
+                m = int(total_sec // 60)
+                s = int(total_sec % 60)
+                label = f"{m:02d}:{s:02d}"
                 ax.text(bar.get_x() + bar.get_width() / 2., height, label,
                         ha='center', va='bottom', fontsize=8, fontweight='bold', color='#2c3e50')
 
@@ -250,10 +270,11 @@ class TodayWidget(QWidget):
         ax.set_xticks(hours)
         ax.set_xticklabels([f"{h:02d}" for h in hours], fontsize=8)
 
-        # 优化坐标轴范围，消除警告
-        max_min = max(minutes + [12])  # 预留一点高度给标签
+        # 优化坐标轴范围
+        max_min = max(minutes_plot_data + [12])
         ax.set_ylim(0, max_min)
         ax.set_xlim(-0.5, 23.5)
+        ax.set_ylabel("学习时长 (分钟)")
 
         ax.axvspan(6, 18, alpha=0.05, color='#f1c40f')  # 白天高亮
         self.figure.tight_layout()
