@@ -1,15 +1,14 @@
-import os
-from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QComboBox,
+from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout,
                              QLabel, QPushButton, QStackedWidget, QGridLayout,
-                             QScrollArea, QFrame, QSizePolicy, QButtonGroup)
-from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QFont, QColor, QPalette
+                             QButtonGroup)
+from PyQt6.QtCore import Qt
+import matplotlib
+
+matplotlib.use('QtAgg')
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
-from matplotlib.patches import Rectangle
 import matplotlib.pyplot as plt
 from datetime import datetime, timedelta
-import numpy as np
 
 # 配置中文字体
 plt.rcParams['font.sans-serif'] = ['Microsoft YaHei', 'SimHei', 'Arial Unicode MS', 'sans-serif']
@@ -29,10 +28,16 @@ def to_rgba(color_str, alpha=1.0):
 
 class HourDetailDialog(QWidget):
     def __init__(self, hour, records, target_date, parent=None):
-        super().__init__(parent)
+        super(HourDetailDialog, self).__init__(parent)
         self.hour = hour
         self.records = records
         self.target_date = target_date
+
+        # 预定义实例属性
+        self.back_btn = None
+        self.figure = None
+        self.canvas = None
+
         self.init_ui()
 
     def init_ui(self):
@@ -51,14 +56,13 @@ class HourDetailDialog(QWidget):
         title_layout.addWidget(title)
         layout.addWidget(title_container)
 
-        back_btn = QPushButton("← 返回 24小时视图")
-        back_btn.setStyleSheet("""
+        self.back_btn = QPushButton("← 返回 24小时视图")
+        self.back_btn.setStyleSheet("""
             QPushButton { background-color: rgba(52, 152, 219, 0.85); color: white; border-radius: 8px; padding: 10px 20px; font-weight: bold; }
             QPushButton:hover { background-color: rgba(41, 128, 185, 0.95); }
         """)
-        back_btn.setFixedWidth(180)
-        layout.addWidget(back_btn, alignment=Qt.AlignmentFlag.AlignLeft)
-        self.back_btn = back_btn
+        self.back_btn.setFixedWidth(180)
+        layout.addWidget(self.back_btn, alignment=Qt.AlignmentFlag.AlignLeft)
 
         chart_container = QWidget()
         chart_container.setStyleSheet("background-color: rgba(255, 255, 255, 160); border-radius: 20px; padding: 15px;")
@@ -76,55 +80,70 @@ class HourDetailDialog(QWidget):
         self.figure.clear()
         ax = self.figure.add_subplot(111)
         ax.set_facecolor('none')
+
+        hour_start = datetime.combine(self.target_date, datetime.min.time()) + timedelta(hours=self.hour)
+        hour_end = hour_start + timedelta(hours=1)
+
         intervals = [f"{i * 10}-{(i + 1) * 10}" for i in range(6)]
-        # 统计每个10分钟区间内的秒数
-        seconds_data = [0] * 6
+        seconds_data = [0.0] * 6
+
         for record in self.records:
-            start_min, end_min = record.start_time.minute, record.end_time.minute
-            start_sec, end_sec = record.start_time.second, record.end_time.second
+            overlap_start = max(record.start_time, hour_start)
+            overlap_end = min(record.end_time, hour_end)
 
-            # 简化计算：将起始和结束时间都转为该小时内的总秒数
-            rec_start_total = start_min * 60 + start_sec
-            rec_end_total = end_min * 60 + end_sec
+            if overlap_end > overlap_start:
+                rel_start = (overlap_start - hour_start).total_seconds()
+                rel_end = (overlap_end - hour_start).total_seconds()
 
-            for i in range(6):
-                interval_start = i * 10 * 60
-                interval_end = (i + 1) * 10 * 60
-                # 计算交集秒数
-                overlap_start = max(rec_start_total, interval_start)
-                overlap_end = min(rec_end_total, interval_end)
-                if overlap_end > overlap_start:
-                    seconds_data[i] += (overlap_end - overlap_start)
+                for i in range(6):
+                    int_start = i * 10 * 60
+                    int_end = (i + 1) * 10 * 60
+                    o_start = max(rel_start, int_start)
+                    o_end = min(rel_end, int_end)
+                    if o_end > o_start:
+                        seconds_data[i] += (o_end - o_start)
 
-        # 转换为分钟数值供绘图
         minutes_plot_data = [s / 60 for s in seconds_data]
         colors = [to_rgba('#3498db') if s > 0 else (0.74, 0.76, 0.78, 0.3) for s in seconds_data]
         bars = ax.bar(intervals, minutes_plot_data, color=colors, edgecolor='white', linewidth=1)
 
-        # 在柱子上方显示时长标签 (MM:SS 格式)
         for bar, total_sec in zip(bars, seconds_data):
             if total_sec > 0:
                 height = bar.get_height()
                 m = int(total_sec // 60)
                 s = int(total_sec % 60)
-                label = f"{m:02d}:{s:02d}"
-                ax.text(bar.get_x() + bar.get_width() / 2., height, label,
+                ax.text(bar.get_x() + bar.get_width() / 2., height, f"{m:02d}:{s:02d}",
                         ha='center', va='bottom', fontsize=8, fontweight='bold', color='#2c3e50')
 
         ax.set_title(f"{self.hour:02d}点的分钟级学习分布", pad=15, fontsize=12, fontweight='bold')
-        # 纵轴显示分钟，最大10分钟
-        ax.set_ylim(0, max(minutes_plot_data + [11]))
+        ax.set_ylim(0, 11)
         ax.set_ylabel("学习时长 (分钟)")
         self.figure.tight_layout()
         self.canvas.draw()
 
 
 class TodayWidget(QWidget):
-    def __init__(self, data_manager):
-        super().__init__()
+    def __init__(self, data_manager, parent=None):
+        super(TodayWidget, self).__init__(parent)
         self.dm = data_manager
         self.current_date = datetime.now().date()
-        self.hourly_records = {i: [] for i in range(24)}
+        self.hourly_seconds = [0.0] * 24
+        self.records_by_hour = {i: [] for i in range(24)}
+
+        # 预定义实例属性，消除 PyCharm 警告
+        self.title_label = None
+        self.yesterday_btn = None
+        self.today_btn = None
+        self.date_group = None
+        self.total_time_label = None
+        self.stack = None
+        self.main_view = None
+        self.detail_view = None
+        self.figure = None
+        self.canvas = None
+        self.nav_grid = None
+        self.hour_buttons = []
+
         self.init_ui()
         self.update_today_stats()
 
@@ -134,7 +153,6 @@ class TodayWidget(QWidget):
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(15)
 
-        # 顶部：标题 + 日期切换 + 总时长
         header_container = QWidget()
         header_container.setStyleSheet("background-color: rgba(255, 255, 255, 180); border-radius: 15px;")
         header_layout = QHBoxLayout(header_container)
@@ -142,10 +160,8 @@ class TodayWidget(QWidget):
         self.title_label = QLabel("今日学习统计")
         self.title_label.setStyleSheet("font-size: 22px; font-weight: bold; color: #2c3e50;")
         header_layout.addWidget(self.title_label)
-
         header_layout.addStretch()
 
-        # 日期切换按钮组
         date_btn_layout = QHBoxLayout()
         self.yesterday_btn = QPushButton("昨天")
         self.today_btn = QPushButton("今天")
@@ -176,11 +192,9 @@ class TodayWidget(QWidget):
         header_layout.addWidget(self.total_time_label)
         layout.addWidget(header_container)
 
-        # 图表区域
         self.stack = QStackedWidget()
         self.main_view = self.create_main_view()
         self.stack.addWidget(self.main_view)
-        self.detail_view = None
         layout.addWidget(self.stack)
 
     def create_main_view(self):
@@ -196,14 +210,13 @@ class TodayWidget(QWidget):
         chart_layout.addWidget(self.canvas)
         layout.addWidget(chart_container)
 
-        # 24小时网格导航
         self.nav_grid = QWidget()
         self.nav_grid.setStyleSheet("background-color: rgba(255, 255, 255, 140); border-radius: 15px; padding: 10px;")
         grid_layout = QGridLayout(self.nav_grid)
         self.hour_buttons = []
         for i in range(24):
             btn = QPushButton(f"{i:02d}")
-            btn.setFixedSize(42, 35)  # 增加高度，防止数字上下遮挡
+            btn.setFixedSize(42, 35)
             btn.clicked.connect(lambda checked, h=i: self.show_hour_detail(h))
             self.hour_buttons.append(btn)
             grid_layout.addWidget(btn, i // 12, i % 12)
@@ -217,30 +230,39 @@ class TodayWidget(QWidget):
         self.back_to_main()
 
     def update_today_stats(self):
-        records = [r for r in self.dm.records if r.start_time.date() == self.current_date]
-        total_sec = sum((r.end_time - r.start_time).total_seconds() for r in records)
+        day_start = datetime.combine(self.current_date, datetime.min.time())
+        day_end = day_start + timedelta(days=1)
+        day_records = [r for r in self.dm.records if r.start_time < day_end and r.end_time > day_start]
+
+        total_sec = 0.0
+        self.hourly_seconds = [0.0] * 24
+        self.records_by_hour = {i: [] for i in range(24)}
+
+        for r in day_records:
+            actual_start = max(r.start_time, day_start)
+            actual_end = min(r.end_time, day_end)
+            total_sec += (actual_end - actual_start).total_seconds()
+
+            for h in range(24):
+                h_start = day_start + timedelta(hours=h)
+                h_end = h_start + timedelta(hours=1)
+                o_start = max(actual_start, h_start)
+                o_end = min(actual_end, h_end)
+                if o_end > o_start:
+                    # 修复 TypeError: 显式调用 .total_seconds()
+                    self.hourly_seconds[h] += (o_end - o_start).total_seconds()
+                    self.records_by_hour[h].append(r)
+
         self.total_time_label.setText(
             f"总时长: {int(total_sec // 3600):02d}:{int((total_sec % 3600) // 60):02d}:{int(total_sec % 60):02d}")
 
-        self.hourly_records = {i: [] for i in range(24)}
-        for r in records: self.hourly_records[r.start_time.hour].append(r)
-
         for i, btn in enumerate(self.hour_buttons):
-            has_data = len(self.hourly_records[i]) > 0
+            has_data = self.hourly_seconds[i] > 0
             bg_color = 'rgba(46, 204, 113, 0.9)' if has_data else 'rgba(236, 240, 241, 0.9)'
             txt_color = 'white' if has_data else '#2c3e50'
-            btn.setStyleSheet(f"""
-                QPushButton {{ 
-                    background-color: {bg_color}; 
-                    color: {txt_color}; 
-                    border-radius: 6px; 
-                    font-weight: bold; 
-                    border: 1px solid rgba(0,0,0,0.1);
-                    padding: 0px;
-                    font-size: 11px;
-                }}
-                QPushButton:hover {{ background-color: #3498db; color: white; }}
-            """)
+            btn.setStyleSheet(
+                f"QPushButton {{ background-color: {bg_color}; color: {txt_color}; border-radius: 6px; font-weight: bold; font-size: 11px; padding: 0px; }}")
+
         self.update_chart()
 
     def update_chart(self):
@@ -248,47 +270,36 @@ class TodayWidget(QWidget):
         ax = self.figure.add_subplot(111)
         ax.set_facecolor('none')
         hours = list(range(24))
-        # 统计每个小时内的总秒数
-        hourly_seconds = [sum((r.end_time - r.start_time).total_seconds() for r in self.hourly_records[h]) for h in
-                          hours]
-        # 转换为分钟数值供绘图
-        minutes_plot_data = [s / 60 for s in hourly_seconds]
-        colors = [to_rgba('#3498db') if s > 0 else (0.74, 0.76, 0.78, 0.3) for s in hourly_seconds]
+        minutes_plot_data = [s / 60 for s in self.hourly_seconds]
+        colors = [to_rgba('#3498db') if s > 0 else (0.74, 0.76, 0.78, 0.3) for s in self.hourly_seconds]
         bars = ax.bar(hours, minutes_plot_data, color=colors, edgecolor='white', linewidth=1)
 
-        # 在柱子上方显示时长标签 (MM:SS 格式)
-        for bar, total_sec in zip(bars, hourly_seconds):
+        for bar, total_sec in zip(bars, self.hourly_seconds):
             if total_sec > 0:
-                height = bar.get_height()
                 m = int(total_sec // 60)
                 s = int(total_sec % 60)
-                label = f"{m:02d}:{s:02d}"
-                ax.text(bar.get_x() + bar.get_width() / 2., height, label,
+                ax.text(bar.get_x() + bar.get_width() / 2., bar.get_height(), f"{m:02d}:{s:02d}",
                         ha='center', va='bottom', fontsize=8, fontweight='bold', color='#2c3e50')
 
         ax.set_title(f"{self.current_date.strftime('%Y-%m-%d')} 24小时分布", pad=15, fontweight='bold')
         ax.set_xticks(hours)
         ax.set_xticklabels([f"{h:02d}" for h in hours], fontsize=8)
-
-        # 优化坐标轴范围
-        max_min = max(minutes_plot_data + [12])
-        ax.set_ylim(0, max_min)
+        ax.set_ylim(0, 65)
         ax.set_xlim(-0.5, 23.5)
         ax.set_ylabel("学习时长 (分钟)")
-
-        ax.axvspan(6, 18, alpha=0.05, color='#f1c40f')  # 白天高亮
+        ax.axvspan(6, 18, alpha=0.05, color='#f1c40f')
         self.figure.tight_layout()
         self.canvas.draw()
 
     def on_chart_click(self, event):
         if event.inaxes and 0 <= round(event.xdata) <= 23:
             h = int(round(event.xdata))
-            if self.hourly_records[h]: self.show_hour_detail(h)
+            if self.hourly_seconds[h] > 0: self.show_hour_detail(h)
 
     def show_hour_detail(self, hour):
-        if not self.hourly_records[hour]: return
-        if self.detail_view: self.detail_view.deleteLater()
-        self.detail_view = HourDetailDialog(hour, self.hourly_records[hour], self.current_date, self)
+        if self.detail_view:
+            self.detail_view.deleteLater()
+        self.detail_view = HourDetailDialog(hour, self.records_by_hour[hour], self.current_date, self)
         self.detail_view.back_btn.clicked.connect(self.back_to_main)
         self.stack.addWidget(self.detail_view)
         self.stack.setCurrentWidget(self.detail_view)
