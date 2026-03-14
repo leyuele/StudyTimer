@@ -192,10 +192,12 @@ class SettingsWidget(QWidget):
         scroll.setFrameShape(QFrame.Shape.NoFrame)
         scroll.setStyleSheet("background: transparent;")
 
+        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+
         container = QWidget()
-        container.setStyleSheet("background-color: rgba(255, 255, 255, 180); border-radius: 20px;")
+        container.setStyleSheet("background-color: transparent;")
         content_layout = QVBoxLayout(container)
-        content_layout.setContentsMargins(25, 25, 25, 25)
+        content_layout.setContentsMargins(0, 0, 0, 0)
         content_layout.setSpacing(20)
 
         # 1. 壁纸设置
@@ -269,8 +271,10 @@ class SettingsWidget(QWidget):
 
     def create_section_title(self, text):
         label = QLabel(text)
+        # 去掉 border-bottom 这一行，其余样式保留
         label.setStyleSheet(
-            "font-size: 16px; font-weight: bold; color: #34495e; border-bottom: 2px solid #3498db; padding-bottom: 5px;")
+            "font-size: 18px; font-weight: bold; color: #34495e; padding: 8px 0; margin: 15px 0 5px 0;"
+        )
         return label
 
     def choose_and_crop_wallpaper(self):
